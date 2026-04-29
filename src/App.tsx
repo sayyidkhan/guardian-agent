@@ -74,28 +74,28 @@ const peopleCatalog: CatalogPerson[] = [
     name: "Sam Altman",
     role: "AI Product Strategy",
     status: "away",
-    avatarUrl: "https://api.dicebear.com/9.x/personas/svg?seed=Sam%20Altman",
+    avatarUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Sam_altman.jpg",
     proxyPrompt: "Sam is away. Help me think through this product/AI strategy decision:",
   },
   {
     name: "Dario Amodei",
     role: "Safety & Research Review",
     status: "online",
-    avatarUrl: "https://api.dicebear.com/9.x/personas/svg?seed=Dario%20Amodei",
+    avatarUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Dario_Amodei_in_2023.jpg",
     proxyPrompt: "Dario is away. Provide a safety-focused recommendation for this decision:",
   },
   {
     name: "Elon Musk",
     role: "Speed & Execution Calls",
     status: "on_leave",
-    avatarUrl: "https://api.dicebear.com/9.x/personas/svg?seed=Elon%20Musk",
+    avatarUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Elon_Musk_2011_Shankbone.JPG",
     proxyPrompt: "Elon is on leave. Give me a fast execution-oriented recommendation for:",
   },
   {
     name: "Donald Trump",
     role: "Public Narrative Framing",
     status: "away",
-    avatarUrl: "https://api.dicebear.com/9.x/personas/svg?seed=Donald%20Trump",
+    avatarUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Donald_Trump_official_portrait.jpg",
     proxyPrompt: "Donald is away. Help frame a strong public-facing response for:",
   },
 ];
@@ -133,7 +133,121 @@ function ServicePill({
   return <span className={`health-pill ${status}`}>{label}: {text}</span>;
 }
 
+function MarketingPage({ onEnter }: { onEnter: () => void }) {
+  return (
+    <div className="mp-shell">
+      <header className="mp-header">
+        <span className="mp-logo">Guardian Agent</span>
+        <button className="primary" onClick={onEnter}>Launch App →</button>
+      </header>
+
+      <main>
+        {/* Hero */}
+        <section className="mp-hero">
+          <div className="lp-badge">AI Decision Proxy</div>
+          <h1 className="mp-headline">
+            Your judgement,<br />available even when<br />you are not.
+          </h1>
+          <p className="mp-sub">
+            Guardian Agent keeps your organisation moving when key decision-makers are
+            unavailable — preserving their judgement, rules, and voice through AI.
+          </p>
+          <div className="lp-actions">
+            <button className="primary mp-cta" onClick={onEnter}>Get Started Free</button>
+            <button className="secondary" onClick={onEnter}>See the Demo</button>
+          </div>
+        </section>
+
+        {/* Problem */}
+        <section className="mp-section">
+          <div className="mp-section-label">The Problem</div>
+          <h2 className="mp-section-title">Decisions stall. Teams wait. Deals die.</h2>
+          <p className="mp-section-body">
+            Every organisation has critical decision-makers. When they travel, sleep, or step out —
+            approvals pile up, projects stall, and opportunities slip. Delegating is risky.
+            Waiting is costly. There hasn't been a better option — until now.
+          </p>
+          <div className="mp-pain-grid">
+            <div className="mp-pain">
+              <span>⏳</span>
+              <div>
+                <strong>Hours lost waiting</strong>
+                <p>Teams block on a single unavailable approver. Work stops.</p>
+              </div>
+            </div>
+            <div className="mp-pain">
+              <span>🎲</span>
+              <div>
+                <strong>Inconsistent delegation</strong>
+                <p>Whoever fills in guesses. Decisions contradict past policy.</p>
+              </div>
+            </div>
+            <div className="mp-pain">
+              <span>📵</span>
+              <div>
+                <strong>No fallback system</strong>
+                <p>There's no structured way to encode and deploy human judgement.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Solution */}
+        <section className="mp-section mp-solution">
+          <div className="mp-section-label solution">The Solution</div>
+          <h2 className="mp-section-title">A Guardian that thinks like you.</h2>
+          <p className="mp-section-body">
+            Set up your Guardian once. Define your role, what decisions you can make,
+            what to escalate, and your reasoning style. From that point, Guardian steps in
+            whenever you're unavailable — responding with your logic, your confidence, your voice.
+          </p>
+          <div className="mp-feature-grid">
+            <div className="mp-feat">
+              <span className="lp-icon">🧠</span>
+              <h4>Encodes your judgement</h4>
+              <p>Your rules, escalation criteria, and decision style — defined once, applied every time.</p>
+            </div>
+            <div className="mp-feat">
+              <span className="lp-icon">⚡</span>
+              <h4>Instant APPROVE / REJECT / ESCALATE</h4>
+              <p>Every question gets a clear decision with confidence score and reasoning — in seconds.</p>
+            </div>
+            <div className="mp-feat">
+              <span className="lp-icon">🎙️</span>
+              <h4>Voice-first with Speechmatics + Vapi</h4>
+              <p>Ask by speaking. Live voice calls for online contacts. AI proxy for everyone else.</p>
+            </div>
+            <div className="mp-feat">
+              <span className="lp-icon">👥</span>
+              <h4>People Catalog</h4>
+              <p>See who's online, away, or on leave. Talk directly or consult their Guardian proxy.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="mp-cta-section">
+          <h2>Ready to build your Guardian?</h2>
+          <p>Takes 2 minutes to configure. Runs 24/7 as your intelligent stand-in.</p>
+          <button className="primary mp-cta" onClick={onEnter}>Create My Guardian →</button>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function enterApp() {
+  window.history.pushState({}, "", "/app");
+}
+
+function leaveApp() {
+  window.history.pushState({}, "", "/");
+}
+
 export default function App() {
+  const [appMode, setAppMode] = useState<"marketing" | "app">(
+    () => window.location.pathname.startsWith("/app") ? "app" : "marketing"
+  );
   const [page, setPage] = useState<"landing" | "setup" | "ask">("landing");
   const [suggestedQuestion, setSuggestedQuestion] = useState("");
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -141,14 +255,14 @@ export default function App() {
 
   const nav = useMemo<NavItem[]>(
     () => [
-      { id: "landing", label: "Landing" },
-      { id: "setup", label: "Setup" },
-      { id: "ask", label: "Ask" },
+      { id: "setup", label: "My Guardian" },
+      { id: "ask", label: "Ask Guardian" },
     ],
     []
   );
 
   useEffect(() => {
+    if (appMode !== "app") return;
     let mounted = true;
 
     async function checkHealth() {
@@ -176,17 +290,32 @@ export default function App() {
 
     checkHealth();
     const interval = setInterval(checkHealth, 30000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, [appMode]);
 
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
+  useEffect(() => {
+    function onPopState() {
+      setAppMode(window.location.pathname.startsWith("/app") ? "app" : "marketing");
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  if (appMode === "marketing") {
+    return (
+      <MarketingPage
+        onEnter={() => {
+          enterApp();
+          setAppMode("app");
+        }}
+      />
+    );
+  }
 
   return (
     <div className="shell">
       <header className="topbar">
-        <h1>Guardian Agent</h1>
+        <h1 className="topbar-logo" onClick={() => { leaveApp(); setAppMode("marketing"); setPage("landing"); }}>Guardian Agent</h1>
         <div className="topbar-right">
           <div className="tabs">
             {nav.map((item: NavItem) => (
@@ -400,15 +529,52 @@ function Landing({
   }, [vapiAssistantOverride]);
 
   return (
-    <section>
-      <div className="hero-block">
-        <h2>Your judgement, available even when you are not.</h2>
-        <p>AI that keeps companies moving when humans are unavailable.</p>
-        <button className="primary" onClick={onStart}>
-          Create My Guardian
-        </button>
+    <section className="landing-page">
+
+      {/* ── Hero ── */}
+      <div className="lp-hero">
+        <div className="lp-badge">AI Decision Proxy</div>
+        <h2 className="lp-headline">Your judgement,<br />available even when you are not.</h2>
+        <p className="lp-sub">
+          Guardian Agent acts as your intelligent stand-in — making decisions, routing approvals,
+          and keeping your team moving while you're away.
+        </p>
+        <div className="lp-actions">
+          <button className="primary" onClick={onStart}>Create My Guardian</button>
+          <button className="secondary" onClick={onStart}>See How It Works ↓</button>
+        </div>
       </div>
 
+      {/* ── Features ── */}
+      <div className="lp-features">
+        <div className="lp-feature">
+          <span className="lp-icon">🧠</span>
+          <h4>Your Rules, Your Voice</h4>
+          <p>Define exactly what you can decide, what to escalate, and how you'd reason. Guardian mirrors your judgement.</p>
+        </div>
+        <div className="lp-feature">
+          <span className="lp-icon">⚡</span>
+          <h4>Instant Decisions</h4>
+          <p>APPROVE, REJECT, or ESCALATE — with reasoning and confidence score — in seconds, not hours.</p>
+        </div>
+        <div className="lp-feature">
+          <span className="lp-icon">🎙️</span>
+          <h4>Voice & Text</h4>
+          <p>Ask via text or record your question with Speechmatics voice transcription. Talk directly or consult the AI proxy.</p>
+        </div>
+      </div>
+
+      {/* ── How it works ── */}
+      <div className="lp-steps">
+        <h3>How it works</h3>
+        <div className="lp-steps-grid">
+          <div className="lp-step"><span>1</span><p>Set up your Guardian profile — your role, decision rules, and escalation criteria.</p></div>
+          <div className="lp-step"><span>2</span><p>Your team asks Guardian when you're unavailable. It responds as you would.</p></div>
+          <div className="lp-step"><span>3</span><p>Talk directly to people who are online, or let the AI proxy handle them when away.</p></div>
+        </div>
+      </div>
+
+      {/* ── People Catalog ── */}
       <div className="catalog-header">
         <h3>People Catalog</h3>
         <p>See who is available now. If unavailable, consult their AI proxy.</p>
@@ -421,7 +587,7 @@ function Landing({
           return (
             <article className="person-card" key={person.name}>
               <img src={person.avatarUrl} alt={person.name} className="avatar" />
-              <div>
+              <div className="person-info">
                 <h4>{person.name}</h4>
                 <p className="person-role">{person.role}</p>
               </div>
