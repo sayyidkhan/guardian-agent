@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "concurrently \"npm:dev:web\" \"npm:dev:api\"",
     "dev:web": "vite",
-    "dev:api": "nodemon --watch api --watch .env --ext js,mjs server.js",
+    "dev:api": "nodemon --watch api --watch server.js --watch .env --watch package.json --ext js,mjs,json server.js",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vapi-ai/web": "^2.3.7",
     "@upstash/redis": "^1.35.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
