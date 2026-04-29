@@ -89,16 +89,47 @@ async function checkSpeechmatics() {
   }
 }
 
+async function checkVapi() {
+  const apiKey = process.env.VAPI_API_KEY;
+  const publicKey = process.env.VITE_VAPI_PUBLIC_KEY;
+
+  if (!apiKey && !publicKey) {
+    return serviceResult("vapi", "degraded", "Vapi keys not configured");
+  }
+
+  try {
+    const res = await withTimeout((signal) =>
+      fetch("https://api.vapi.ai/assistant", {
+        method: "GET",
+        headers: apiKey
+          ? { Authorization: `Bearer ${apiKey}` }
+          : { Authorization: `Bearer ${publicKey}` },
+        signal,
+      })
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      return serviceResult("vapi", "down", `Vapi check failed: ${text}`);
+    }
+
+    return serviceResult("vapi", "healthy", "API reachable");
+  } catch (error) {
+    return serviceResult("vapi", "down", error.message || "Vapi unreachable");
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-  const [openai, speechmatics, redis] = await Promise.all([
+  const [openai, speechmatics, redis, vapi] = await Promise.all([
     checkOpenAI(),
     checkSpeechmatics(),
     checkRedis(),
+    checkVapi(),
   ]);
 
-  const services = { openai, speechmatics, redis };
+  const services = { openai, speechmatics, redis, vapi };
   const statuses = Object.values(services).map((item) => item.status);
   const overall = statuses.includes("down")
     ? "down"

@@ -58,6 +58,7 @@ type HealthResponse = {
     openai: HealthService;
     speechmatics: HealthService;
     redis: HealthService;
+    vapi: HealthService;
   };
 };
 
@@ -250,6 +251,7 @@ export default function App() {
   );
   const [page, setPage] = useState<"landing" | "setup" | "ask">("landing");
   const [suggestedQuestion, setSuggestedQuestion] = useState("");
+  const [consultPersonName, setConsultPersonName] = useState("");
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const { guardian, setGuardian, loading } = useGuardian();
 
@@ -283,6 +285,7 @@ export default function App() {
               details: "Health API unavailable",
             },
             redis: { name: "redis", status: "unknown", details: "Health API unavailable" },
+            vapi: { name: "vapi", status: "unknown", details: "Health API unavailable" },
           },
         });
       }
@@ -335,6 +338,7 @@ export default function App() {
               status={health?.services.speechmatics.status || "unknown"}
             />
             <ServicePill label="Redis" status={health?.services.redis.status || "unknown"} />
+            <ServicePill label="Vapi" status={health?.services.vapi.status || "unknown"} />
           </div>
         </div>
       </header>
@@ -345,6 +349,7 @@ export default function App() {
             onStart={() => setPage("setup")}
             onConsult={(person) => {
               setSuggestedQuestion(`${person.proxyPrompt} `);
+              setConsultPersonName(person.name);
               setPage("ask");
             }}
           />
@@ -364,6 +369,7 @@ export default function App() {
             guardian={guardian}
             loading={loading}
             initialQuestion={suggestedQuestion}
+            consultPersonName={consultPersonName}
           />
         )}
       </main>
@@ -786,23 +792,168 @@ function Ask({
   guardian,
   loading,
   initialQuestion,
+  consultPersonName,
 }: {
   guardian: GuardianProfile | null;
   loading: boolean;
   initialQuestion: string;
+  consultPersonName: string;
 }) {
+  const DEFAULT_VAPI_ASSISTANT_ID = "50a4bd83-401e-4189-b856-e4474a72872c";
+
   const [question, setQuestion] = useState("");
   const [result, setResult] = useState<GuardianDecision | null>(null);
   const [pending, setPending] = useState(false);
   const [recording, setRecording] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState("");
   const [voiceError, setVoiceError] = useState("");
+  const [isVapiCalling, setIsVapiCalling] = useState(false);
+  const [vapiStatus, setVapiStatus] = useState("");
+  const [vapiAssistantId, setVapiAssistantId] = useState("");
+  const [consultMode, setConsultMode] = useState<"chat" | "voice">("chat");
+  const [vapiAssistantOverride] = useState(
+    () => localStorage.getItem("guardian:vapi-assistant-override") || ""
+  );
+  const vapiRef = useRef<Vapi | null>(null);
+  const vapiPublicKey = import.meta.env.VITE_VAPI_PUBLIC_KEY;
+  const voices = [
+    { name: "Vale", tone: "Bright and inquisitive" },
+    { name: "Atlas", tone: "Calm and executive" },
+    { name: "Nova", tone: "Warm and confident" },
+    { name: "Sage", tone: "Measured and analytical" },
+  ];
+  const [voiceIndex, setVoiceIndex] = useState(0);
+
+  const personVoiceMap: Record<string, number> = {
+    "Sam Altman": 0,
+    "Elon Musk": 1,
+    "Donald Trump": 2,
+    "Dario Amodei": 3,
+  };
 
   useEffect(() => {
     if (initialQuestion && !question.trim()) {
       setQuestion(initialQuestion);
     }
   }, [initialQuestion, question]);
+
+  useEffect(() => {
+    if (!consultPersonName) return;
+    const mapped = personVoiceMap[consultPersonName];
+    if (typeof mapped === "number") {
+      setVoiceIndex(mapped);
+    }
+  }, [consultPersonName]);
+
+  useEffect(() => {
+    async function fetchVapiConfig() {
+      try {
+        const res = await fetch("/api/vapi-config");
+        const data = (await res.json()) as { configured?: boolean; assistantId?: string };
+        if (res.ok && data.configured && data.assistantId) {
+          setVapiAssistantId(data.assistantId);
+        }
+      } catch {
+        setVapiStatus("Unable to load Vapi configuration.");
+      }
+    }
+
+    void fetchVapiConfig();
+
+    return () => {
+      if (vapiRef.current) {
+        void vapiRef.current.stop();
+      }
+    };
+  }, []);
+
+  function initVapi() {
+    if (vapiRef.current) return vapiRef.current;
+    if (!vapiPublicKey) return null;
+
+    const vapi = new Vapi(vapiPublicKey);
+
+    vapi.on("call-start", () => {
+      setIsVapiCalling(true);
+      setVapiStatus("Voice call connected — speak now.");
+    });
+
+    vapi.on("call-end", () => {
+      setIsVapiCalling(false);
+      setVapiStatus("Voice call ended.");
+    });
+
+    vapi.on("message", (msg: VapiMessage) => {
+      if (
+        msg.type === "transcript" &&
+        msg.role === "user" &&
+        typeof msg.transcript === "string" &&
+        msg.transcript.trim()
+      ) {
+        setQuestion((prev) =>
+          prev ? `${prev} ${msg.transcript}` : msg.transcript ?? ""
+        );
+      }
+    });
+
+    vapi.on("error", (err: unknown) => {
+      console.error("[Vapi error]", err);
+      let message = "Vapi error";
+      if (err instanceof Error) {
+        message = err.message;
+      } else if (typeof err === "string") {
+        message = err;
+      } else if (err && typeof err === "object") {
+        const e = err as Record<string, unknown>;
+        message =
+          typeof e.message === "string" ? e.message :
+          typeof e.error === "string" ? e.error :
+          typeof e.errorMsg === "string" ? e.errorMsg :
+          JSON.stringify(e);
+      }
+      setVapiStatus(`Error: ${message}`);
+      setIsVapiCalling(false);
+    });
+
+    vapiRef.current = vapi;
+    return vapi;
+  }
+
+  async function startVapiCall() {
+    const activeAssistantId =
+      vapiAssistantOverride.trim() || vapiAssistantId || DEFAULT_VAPI_ASSISTANT_ID;
+    if (!vapiPublicKey) {
+      setVapiStatus("Missing Vapi config: VITE_VAPI_PUBLIC_KEY");
+      return false;
+    }
+
+    try {
+      const vapi = initVapi();
+      if (!vapi) return false;
+      await vapi.start(activeAssistantId);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to start Vapi call";
+      setVapiStatus(message);
+      setIsVapiCalling(false);
+      return false;
+    }
+  }
+
+  async function endVapiCall() {
+    if (!vapiRef.current) return;
+    try {
+      await vapiRef.current.stop();
+    } catch {
+      setVapiStatus("Unable to stop Vapi call cleanly.");
+    }
+  }
+
+  async function startVoiceFlow() {
+    setVoiceError("");
+    setVoiceStatus("Starting voice...");
+    await startVapiCall();
+  }
 
   async function captureAndTranscribe() {
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
@@ -836,6 +987,13 @@ function Ask({
       await stopPromise;
 
       const audioBlob = new Blob(chunks, { type: mimeType });
+
+      if (audioBlob.size < 1000) {
+        setVoiceError("Recording too short or silent. Please speak clearly and try again.");
+        setVoiceStatus("");
+        return;
+      }
+
       const audioBase64 = await blobToBase64(audioBlob);
 
       setVoiceStatus("Transcribing with Speechmatics...");
@@ -851,7 +1009,12 @@ function Ask({
 
       const data = (await res.json()) as { transcript?: string; error?: string };
       if (!res.ok) {
-        setVoiceError(data.error || "Speechmatics transcription failed.");
+        const rawErr = data.error || "";
+        const friendlyErr =
+          !rawErr || rawErr.toLowerCase().includes("unhandled") || rawErr.includes("undefined")
+            ? "Speechmatics could not process this audio. Speak clearly for 4+ seconds and try again."
+            : rawErr;
+        setVoiceError(friendlyErr);
         setVoiceStatus("");
         return;
       }
@@ -865,7 +1028,10 @@ function Ask({
       setQuestion((prev: string) => (prev ? `${prev} ${data.transcript}` : data.transcript || ""));
       setVoiceStatus("Transcript added.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to record/transcribe audio.";
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Unable to record audio. Check microphone permissions and try again.";
       setVoiceError(message);
       setVoiceStatus("");
     } finally {
@@ -876,8 +1042,9 @@ function Ask({
     }
   }
 
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function askGuardian() {
+    if (!question.trim()) return;
+
     setPending(true);
     setResult(null);
 
@@ -892,6 +1059,11 @@ function Ask({
     setResult(data);
   }
 
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    await askGuardian();
+  }
+
   if (loading) return <p>Loading profile...</p>;
 
   return (
@@ -899,30 +1071,100 @@ function Ask({
       <h2>Ask Guardian</h2>
       {!guardian && <p>Set up your Guardian profile first.</p>}
 
-      <form onSubmit={submit} className="form">
-        <label>
-          Question
-          <textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Can we approve this vendor quote for $800?"
-            required
-          />
-        </label>
+      <div className="consult-mode-switch" role="tablist" aria-label="Consult mode">
         <button
-          className="primary"
           type="button"
-          onClick={captureAndTranscribe}
-          disabled={recording || pending || !guardian}
+          className={consultMode === "chat" ? "active" : ""}
+          onClick={() => setConsultMode("chat")}
         >
-          {recording ? "Recording..." : "Use Speechmatics Voice"}
+          Ask (Chat)
         </button>
-        <button className="primary" type="submit" disabled={pending || !guardian}>
-          {pending ? "Thinking..." : "Ask"}
+        <button
+          type="button"
+          className={consultMode === "voice" ? "active" : ""}
+          onClick={() => setConsultMode("voice")}
+        >
+          Voice
         </button>
-        {voiceStatus && <p>{voiceStatus}</p>}
-        {voiceError && <p>{voiceError}</p>}
-      </form>
+      </div>
+
+      {consultMode === "voice" ? (
+        <div className="voice-screen">
+          <p className="voice-screen-title">Choose a voice</p>
+          {consultPersonName && (
+            <p className="voice-mapped-hint">Mapped for {consultPersonName}</p>
+          )}
+          <div className="voice-orb" aria-hidden="true" />
+          <h3>{voices[voiceIndex].name}</h3>
+          <p>{voices[voiceIndex].tone}</p>
+
+          <div className="voice-dots">
+            {voices.map((voice, idx) => (
+              <button
+                key={voice.name}
+                type="button"
+                className={idx === voiceIndex ? "active" : ""}
+                onClick={() => setVoiceIndex(idx)}
+                aria-label={`Use ${voice.name} voice`}
+              />
+            ))}
+          </div>
+
+          <div className="voice-actions">
+            <button
+              className="primary"
+              type="button"
+              onClick={() => {
+                if (isVapiCalling) {
+                  void endVapiCall();
+                  return;
+                }
+                void startVoiceFlow();
+              }}
+              disabled={pending || !guardian}
+            >
+              {isVapiCalling ? "End Voice" : "Start Voice"}
+            </button>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => void askGuardian()}
+              disabled={pending || !guardian || !question.trim()}
+            >
+              {pending ? "Thinking..." : "Ask with Transcript"}
+            </button>
+            <button className="secondary" type="button" onClick={() => setConsultMode("chat")}>
+              Open Chat Instead
+            </button>
+          </div>
+
+          {question && <p className="voice-preview">Transcript: {question}</p>}
+          {vapiStatus && <p>{vapiStatus}</p>}
+          {voiceStatus && <p>{voiceStatus}</p>}
+          {voiceError && <p>{voiceError}</p>}
+        </div>
+      ) : (
+        <form onSubmit={submit} className="form">
+          <label>
+            Question
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  void askGuardian();
+                }
+              }}
+              placeholder="Can we approve this vendor quote for $800?"
+              required
+            />
+          </label>
+          <p className="voice-preview">Press Cmd/Ctrl + Enter to ask.</p>
+          {voiceStatus && <p>{voiceStatus}</p>}
+          {voiceError && <p>{voiceError}</p>}
+        </form>
+      )}
 
       {result && (
         <div className="result">

@@ -126,8 +126,20 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ transcript, jobId });
   } catch (error) {
+    const rawMessage =
+      typeof error === "string"
+        ? error
+        : error && typeof error.message === "string"
+          ? error.message
+          : "";
+
+    const message =
+      rawMessage && !rawMessage.includes("Unhandled error. (undefined)")
+        ? rawMessage
+        : "Speechmatics could not process this audio. Please try again with a clearer 4-6 second recording.";
+
     return res.status(error.status || 500).json({
-      error: error.message || "Speechmatics transcription failed",
+      error: message,
     });
   }
 }
