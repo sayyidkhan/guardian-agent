@@ -41,6 +41,7 @@ type VapiMessage = {
   type?: string;
   role?: "assistant" | "user" | string;
   transcript?: string;
+  transcriptType?: "partial" | "final";
 };
 
 type HealthState = "healthy" | "degraded" | "down" | "unknown";
@@ -887,6 +888,7 @@ function Ask({
       if (
         msg.type === "transcript" &&
         msg.role === "user" &&
+        msg.transcriptType === "final" &&
         typeof msg.transcript === "string" &&
         msg.transcript.trim()
       ) {
